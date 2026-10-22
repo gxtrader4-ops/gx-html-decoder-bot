@@ -7,8 +7,8 @@ const { JSDOM } = jsdom;
 // ==================== [ CONFIGURATION ] ====================
 const TOKEN = '8855372052:AAHJ04PSoc6nBSAP71upW0N6gdSmnNYkdz8';
 const ADMIN_ID = 8419760844;
-const DEVELOPER_HANDLE = '@NIROB\\_GX\\_LEADER';
-const DEVELOPER_LINK = 'https://t.me/NIROB_GX_LEADER';
+const DEVELOPER_HANDLE = '@NIROB_GX_LEADER';
+const DEVELOPER_LINK = '@NIROB_GX_LEADER';
 
 const bot = new TelegramBot(TOKEN, { polling: true });
 
@@ -120,8 +120,8 @@ bot.on('message', async (msg) => {
     // ১. Developer Info (ফিক্সড ইউজারনেম ও ক্লিন লিংক)
     if (text === "👨‍💻 Developer Info") {
         const devMsg = `💻 *Developer Details*\n\n` +
-                       `👤 *Developer:* NIROB GX (${DEVELOPER_HANDLE})\n` +
-                       `🔗 *Telegram Direct:* https://t.me/NIROB\\_GX\\_LEADER\n` +
+                       `👤 *Developer:* @NIROB_GX_LEADER (${DEVELOPER_HANDLE})\n` +
+                       `🔗 *Telegram Direct:* @NIROB_GX_LEADER\n` +
                        `🛡 *Powered By:* GX BIG COMMUNITY\n\n` +
                        `যেকোনো প্রয়োজনে সরাসরি যোগাযোগ করতে পারেন:\n` +
                        `👉 ${DEVELOPER_LINK}`;
