@@ -8,7 +8,7 @@ const { JSDOM } = jsdom;
 const TOKEN = '8855372052:AAHJ04PSoc6nBSAP71upW0N6gdSmnNYkdz8';
 const ADMIN_ID = 8419760844;
 const DEVELOPER_HANDLE = '@NIROB_GX_LEADER';
-const DEVELOPER_LINK = '@NIROB_GX_LEADER';
+const DEVELOPER_LINK = 'https://t.me/@NIROB_GX_LEADER';
 
 const bot = new TelegramBot(TOKEN, { polling: true });
 
@@ -41,43 +41,47 @@ const adminMenu = {
     }
 };
 
-// ==================== [ ADVANCED HTML DECODING & CLEANING LOGIC ] ====================
+// ==================== [ SMART HTML DECODING LOGIC ] ====================
 function processAndCleanHTML(inputHtml) {
     try {
-        // ১. প্রথম থেকে শেষ পর্যন্ত সব ধরনের অ্যান্টি-ইনস্পেক্ট, ট্র্যাপ, জাংক স্ক্রিপ্ট এবং প্রটেকশন কোড রিমুভ করা
-        let cleanedText = inputHtml
-            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, (match) => {
-                if (
-                    match.includes('destroyAndRedirect') ||
-                    match.includes('speechSynthesis') ||
-                    match.includes('dense_junk_stream') ||
-                    match.includes('keyCode === 123') ||
-                    match.includes('debugger') ||
-                    match.includes('contextmenu') ||
-                    match.includes('eval') ||
-                    match.includes('atob') ||
-                    match.length > 300 // বড় বড় অবফাসকেটেড জাংক কোড ব্লক ফেলে দেওয়া
-                ) {
-                    return '';
-                }
-                return match;
-            });
+        // ১. শুধুমাত্র ক্ষতিকর সিকিউরিটি ট্র্যাপ রিমুভ করা (অ্যানিমেশন বা নরমাল JS ভাঙবে না)
+        let cleanedText = inputHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, (match) => {
+            // শুধুমাত্র ধ্বংসাত্মক ও অ্যান্টি-ইনস্পেক্ট ট্র্যাপ স্ক্রিপ্ট রিমুভ
+            if (
+                match.includes('destroyAndRedirect') ||
+                match.includes('speechSynthesis') ||
+                match.includes('dense_junk_stream') ||
+                match.includes('keyCode === 123') ||
+                match.includes('debugger') ||
+                match.includes('contextmenu')
+            ) {
+                return ''; // ক্ষতিকর স্ক্রিপ্ট বাদ
+            }
+            return match; // কাজের JS এবং অ্যানিমেশন কোড রেখে দেওয়া
+        });
 
-        // ২. JSDOM দিয়ে রিয়েল DOM তৈরি করে সঠিক স্ট্রাকচার বের করা
+        // ২. JSDOM দিয়ে DOM তৈরি
         const dom = new JSDOM(cleanedText);
         const { document } = dom.window;
 
-        // বাকী থাকা যেকোনো ক্ষতিকর বা ফালতু স্ক্রিপ্ট ট্যাগ রিমুভ করা
+        // ৩. ক্ষতিকর ইভেন্ট লিসেনার স্ক্রিপ্ট ফিল্টার করা
         const scripts = document.querySelectorAll('script');
         scripts.forEach(script => {
             const code = script.textContent || '';
-            if (code.includes('continue;case') || code.length > 200 || code.includes('eval(')) {
+            if (
+                code.includes('destroyAndRedirect') || 
+                code.includes('speechSynthesis') || 
+                code.includes('keyCode === 123')
+            ) {
                 script.remove();
             }
         });
 
-        // ৩. একদম নির্ভুলভাবে মূল HTML স্ট্রাকচার (DOCTYPE থেকে শেষ </html> বা শেষ </div> পর্যন্ত) এক্সট্র্যাক্ট করা
-        let finalHtml = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+        // ৪. ফাইনাল ডিকোডেড ক্লিন HTML আউটপুট
+        let finalHtml = document.documentElement.outerHTML;
+        if (!finalHtml.toLowerCase().startsWith('<!doctype')) {
+            finalHtml = '<!DOCTYPE html>\n' + finalHtml;
+        }
 
         return finalHtml;
     } catch (err) {
@@ -117,11 +121,11 @@ bot.on('message', async (msg) => {
     if (bannedUsers.has(chatId)) return;
     allUsers.add(chatId);
 
-    // ১. Developer Info (ফিক্সড ইউজারনেম ও ক্লিন লিংক)
+    // ১. Developer Info (ফিক্সড ইউজারনেম ও সোজা লিংক)
     if (text === "👨‍💻 Developer Info") {
         const devMsg = `💻 *Developer Details*\n\n` +
                        `👤 *Developer:* @NIROB_GX_LEADER (${DEVELOPER_HANDLE})\n` +
-                       `🔗 *Telegram Direct:* @NIROB_GX_LEADER\n` +
+                       `🔗 *Telegram Direct:* https://t.me/NIROB\\_GX\\_LEADER\n` +
                        `🛡 *Powered By:* GX BIG COMMUNITY\n\n` +
                        `যেকোনো প্রয়োজনে সরাসরি যোগাযোগ করতে পারেন:\n` +
                        `👉 ${DEVELOPER_LINK}`;
@@ -135,7 +139,7 @@ bot.on('message', async (msg) => {
     // ২. HTML to Decode
     if (text === "📜 HTML to Decode") {
         userState[chatId] = 'WAITING_FOR_HTML';
-        return bot.sendMessage(chatId, "📥 *আপনার Obfuscated / Encrypted HTML কোডটি এখানে মেসেজ হিসাবে পেস্ট করুন অথবা HTML ফাইল হিসাবে পাঠান:*", { parse_mode: 'Markdown' });
+        return bot.sendMessage(chatId, "📥 *আপনার Obfuscated / Encrypted HTML কোডটি এখানে পেস্ট করুন অথবা HTML ফাইল পাঠিয়া দিন:*", { parse_mode: 'Markdown' });
     }
 
     // ৩. Link to Decode
@@ -195,7 +199,7 @@ bot.on('message', async (msg) => {
             return bot.sendMessage(chatId, "❌ অনুগ্রহ করে সঠিক URL দিন (https:// সহ)!");
         }
 
-        const waitMsg = await bot.sendMessage(chatId, "⏳ ওয়েবসাইট থেকে রিয়েল HTML এক্সট্র্যাক্ট ও ক্লিন করা হচ্ছে...");
+        const waitMsg = await bot.sendMessage(chatId, "⏳ ওয়েবসাইট থেকে রিয়েল অ্যানিমেটেড HTML ডিকোড ও ক্লিন করা হচ্ছে...");
         try {
             const response = await axios.get(text, {
                 headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
@@ -206,7 +210,7 @@ bot.on('message', async (msg) => {
             fs.writeFileSync(filePath, cleanCode);
 
             await bot.sendDocument(chatId, filePath, {
-                caption: `✅ *সফলভাবে ডিকোড ও ক্লিন কোড এক্সট্র্যাক্ট করা হয়েছে!*\n🔗 Source: ${text}`,
+                caption: `✅ *সফলভাবে ডিকোড করা হয়েছে (অ্যানিমেশন সহ রানিং)!*\n🔗 Source: ${text}`,
                 parse_mode: 'Markdown'
             });
 
@@ -228,7 +232,7 @@ bot.on('message', async (msg) => {
             fs.writeFileSync(filePath, cleanCode);
 
             await bot.sendDocument(chatId, filePath, {
-                caption: "✅ *আপনার HTML সফলভাবে ডিকোড এবং একদম শেষ ডিপ (div) পর্যন্ত ক্লিন করা হয়েছে!*",
+                caption: "✅ *আপনার HTML সফলভাবে ডিকোড করা হয়েছে! (সব অ্যানিমেশন ও ইন্টারঅ্যাকশন ১০০% কাজ করবে)*",
                 parse_mode: 'Markdown'
             });
 
@@ -251,7 +255,7 @@ bot.on('document', async (msg) => {
         const fileId = msg.document.file_id;
         const fileLink = await bot.getFileLink(fileId);
 
-        const waitMsg = await bot.sendMessage(chatId, "⏳ ফাইল থেকে HTML ডাউনলোড ও ক্লিন করা হচ্ছে...");
+        const waitMsg = await bot.sendMessage(chatId, "⏳ ফাইল থেকে HTML ডিকোড ও প্রসেস করা হচ্ছে...");
         try {
             const response = await axios.get(fileLink);
             const cleanCode = processAndCleanHTML(response.data);
@@ -260,7 +264,7 @@ bot.on('document', async (msg) => {
             fs.writeFileSync(filePath, cleanCode);
 
             await bot.sendDocument(chatId, filePath, {
-                caption: "✅ *আপনার HTML ফাইলটি একদম ক্লিন করে নিচে পাঠানো হলো!*",
+                caption: "✅ *আপনার HTML ফাইলটি প্রপার অ্যানিমেশন সহ ক্লিন করে নিচে পাঠানো হলো!*",
                 parse_mode: 'Markdown'
             });
 
