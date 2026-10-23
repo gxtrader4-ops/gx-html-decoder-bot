@@ -131,7 +131,7 @@ def handle_incoming_message(message):
     elif message.text:
         text = message.text.strip()
         # যদি লিংক দেওয়া হয়, তবে রিকোয়েস্ট পাঠিয়ে পেজের সোর্স কোড ফেচ করবে
--        if text.startswith("http://") or text.startswith("https://"):
+        if text.startswith("http://") or text.startswith("https://"):
             bot.reply_to(message, "⏳ লিংক থেকে রিয়েল সোর্স কোড ফেচ করা হচ্ছে...")
             try:
                 headers = {
