@@ -5,8 +5,8 @@ from flask import Flask, request
 import telebot
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
-# কনফিগারেশন ও টোকেন
-BOT_TOKEN = "8989938530:AAGGfDO6pQUukxXFjpjE1ydcC61st-7tbkc"
+# নতুন কনফিগারেশন ও টোকেন
+BOT_TOKEN = "8989938530:AAFhsY_5jC2_YF3d0QHki4uAI87gcRzUFvY"
 ADMIN_ID = 8419760844
 ADMIN_USERNAME = "NIROB_GX_LEADER"
 
