@@ -1,278 +1,200 @@
-const TelegramBot = require('node-telegram-bot-api');
-const axios = require('axios');
-const fs = require('fs');
-const jsdom = require('jsdom');
-const { JSDOM } = jsdom;
+import os
+import json
+import requests
+from flask import Flask, request
+import telebot
+from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 
-// ==================== [ CONFIGURATION ] ====================
-const TOKEN = '8855372052:AAHJ04PSoc6nBSAP71upW0N6gdSmnNYkdz8';
-const ADMIN_ID = 8419760844;
-const DEVELOPER_HANDLE = '@NIROB_GX_LEADER';
-const DEVELOPER_LINK = 'https://t.me/@NIROB_GX_LEADER';
+# কনফিগারেশন ও টোকেন
+BOT_TOKEN = "8989938530:AAGGfDO6pQUukxXFjpjE1ydcC61st-7tbkc"
+ADMIN_ID = 8419760844
+ADMIN_USERNAME = "NIROB_GX_LEADER"
 
-const bot = new TelegramBot(TOKEN, { polling: true });
+bot = telebot.TeleBot(BOT_TOKEN)
+app = Flask(__name__)
 
-// ডাটাবেস ভেরিয়েবল
-let bannedUsers = new Set();
-let allUsers = new Set();
-let userState = {};
+# ডাটাবেজ ফাইল ম্যানেজমেন্ট
+DB_FILE = "bot_database.json"
 
-// ==================== [ KEYBOARDS ] ====================
+def load_db():
+    if not os.path.exists(DB_FILE):
+        return {"users": [], "banned": []}
+    with open(DB_FILE, "r") as f:
+        return json.load(f)
 
-// ১. সাধারণ ইউজার মেনু
-const userMenu = {
-    reply_markup: {
-        keyboard: [
-            [{ text: "🔗 Link to Decode" }, { text: "📜 HTML to Decode" }],
-            [{ text: "👨‍💻 Developer Info" }]
-        ],
-        resize_keyboard: true
-    }
-};
+def save_db(data):
+    with open(DB_FILE, "w") as f:
+        json.dump(data, f, indent=4)
 
-// ২. অ্যাডমিন প্যানেল মেনু
-const adminMenu = {
-    reply_markup: {
-        keyboard: [
-            [{ text: "🚫 Ban User" }, { text: "✅ Unban User" }],
-            [{ text: "📊 All Users" }, { text: "🔙 User Mode" }]
-        ],
-        resize_keyboard: true
-    }
-};
+# মূল কিবোর্ড লেআউট
+def get_main_keyboard(user_id):
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.row(KeyboardButton("📊 Admin Stats"), KeyboardButton("🛠️ Admin Help"))
+    markup.row(KeyboardButton("🔓 Obfuscate HTML"), KeyboardButton("🔗 Link to Real HTML"))
+    markup.row(KeyboardButton("📄 HTML to Real HTML"))
+    return markup
 
-// ==================== [ SMART HTML DECODING LOGIC ] ====================
-function processAndCleanHTML(inputHtml) {
-    try {
-        // ১. শুধুমাত্র ক্ষতিকর সিকিউরিটি ট্র্যাপ রিমুভ করা (অ্যানিমেশন বা নরমাল JS ভাঙবে না)
-        let cleanedText = inputHtml.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, (match) => {
-            // শুধুমাত্র ধ্বংসাত্মক ও অ্যান্টি-ইনস্পেক্ট ট্র্যাপ স্ক্রিপ্ট রিমুভ
-            if (
-                match.includes('destroyAndRedirect') ||
-                match.includes('speechSynthesis') ||
-                match.includes('dense_junk_stream') ||
-                match.includes('keyCode === 123') ||
-                match.includes('debugger') ||
-                match.includes('contextmenu')
-            ) {
-                return ''; // ক্ষতিকর স্ক্রিপ্ট বাদ
-            }
-            return match; // কাজের JS এবং অ্যানিমেশন কোড রেখে দেওয়া
-        });
+# /start কমান্ড হ্যান্ডলার
+@bot.message_handler(commands=['start'])
+def send_welcome(message):
+    user_id = message.from_user.id
+    db = load_db()
+    
+    if user_id in db["banned"] and user_id != ADMIN_ID:
+        bot.reply_to(message, "❌ দুঃখিত, এই বট ব্যবহারের জন্য আপনাকে ব্যান করা হয়েছে!")
+        return
 
-        // ২. JSDOM দিয়ে DOM তৈরি
-        const dom = new JSDOM(cleanedText);
-        const { document } = dom.window;
+    if user_id not in db["users"]:
+        db["users"].append(user_id)
+        save_db(db)
 
-        // ৩. ক্ষতিকর ইভেন্ট লিসেনার স্ক্রিপ্ট ফিল্টার করা
-        const scripts = document.querySelectorAll('script');
-        scripts.forEach(script => {
-            const code = script.textContent || '';
-            if (
-                code.includes('destroyAndRedirect') || 
-                code.includes('speechSynthesis') || 
-                code.includes('keyCode === 123')
-            ) {
-                script.remove();
-            }
-        });
+    welcome_msg = (
+        f"👋 স্বাগতম GX HTML Decoder বোটে!\n\n"
+        f"ডেভেলপার: @{ADMIN_USERNAME}\n"
+        f"আপনার সিকিউরড বা অবফাসকেটেড HTML ফাইল বা লিংক ক্লিন করে রিয়েল কোড পেতে নিচের অপশনগুলো ব্যবহার করুন।"
+    )
+    
+    bot.send_message(message.chat.id, welcome_msg, reply_markup=get_main_keyboard(user_id))
 
-        // ৪. ফাইনাল ডিকোডেড ক্লিন HTML আউটপুট
-        let finalHtml = document.documentElement.outerHTML;
-        if (!finalHtml.toLowerCase().startsWith('<!doctype')) {
-            finalHtml = '<!DOCTYPE html>\n' + finalHtml;
-        }
+# টেক্সট, বাটন ক্লিক এবং ডকুমেন্ট হ্যান্ডলার
+@bot.message_handler(func=lambda message: True, content_types=['text', 'document'])
+def handle_incoming_message(message):
+    user_id = message.from_user.id
+    db = load_db()
+    
+    if user_id in db["banned"] and user_id != ADMIN_ID:
+        return
 
-        return finalHtml;
-    } catch (err) {
-        throw new Error("HTML প্রসেস করতে সমস্যা হয়েছে: " + err.message);
-    }
-}
+    if message.text:
+        text = message.text.strip()
+        
+        # বাটন অপশন চেক
+        if text == "📊 Admin Stats":
+            if user_id == ADMIN_ID:
+                total_users = len(db["users"])
+                total_banned = len(db["banned"])
+                bot.reply_to(message, f"📊 **Bot Statistics:**\n\n👤 Total Users: {total_users}\n🚫 Banned Users: {total_banned}")
+            else:
+                bot.reply_to(message, "❌ এই কমান্ডটি শুধু অ্যাডমিনের জন্য।")
+            return
+            
+        elif text == "🛠️ Admin Help":
+            help_text = (
+                "🛠️ **Admin Commands Help:**\n\n"
+                "/ban [user_id] - ইউজার ব্যান করতে\n"
+                "/unban [user_id] - ইউজার আনব্যান করতে"
+            )
+            bot.reply_to(message, help_text)
+            return
+            
+        elif text in ["🔓 Obfuscate HTML", "🔗 Link to Real HTML", "📄 HTML to Real HTML"]:
+            bot.reply_to(message, "📥 অনুগ্রহ করে আপনার সিকিউরড বা অবফাসকেটেড HTML ফাইলটি ডকুমেন্ট (Document) হিসেবে পাঠান অথবা ডিরেক্ট কোড/লিংক পেস্ট করুন।")
+            return
 
-// ==================== [ BOT COMMANDS & LOGIC ] ====================
+        # ব্যান এবং আনব্যান কমান্ড চেক
+        if text.startswith('/ban ') and user_id == ADMIN_ID:
+            try:
+                b_id = int(text.replace('/ban ', '').strip())
+                if b_id not in db["banned"]:
+                    db["banned"].append(b_id)
+                    save_db(db)
+                    bot.reply_to(message, f"✅ User {b_id} successfully banned.")
+            except ValueError:
+                bot.reply_to(message, "❌ সঠিক ইউজার আইডি দিন।")
+            return
+        elif text.startswith('/unban ') and user_id == ADMIN_ID:
+            try:
+                u_id = int(text.replace('/unban ', '').strip())
+                if u_id in db["banned"]:
+                    db["banned"].remove(u_id)
+                    save_db(db)
+                    bot.reply_to(message, f"✅ User {u_id} successfully unbanned.")
+            except ValueError:
+                bot.reply_to(message, "❌ সঠিক ইউজার আইডি দিন।")
+            return
 
-// /start কমান্ড
-bot.onText(/\/start/, (msg) => {
-    const chatId = msg.chat.id;
-    allUsers.add(chatId);
+    html_content = ""
+    file_name = "clean_decoded.html"
 
-    if (bannedUsers.has(chatId)) {
-        return bot.sendMessage(chatId, "❌ *আপনি এই বট থেকে ব্যান হয়ে আছেন!*", { parse_mode: 'Markdown' });
-    }
+    # যদি ফাইল আপলোড করা হয়
+    if message.document:
+        doc = message.document
+        if not doc.file_name.endswith(('.html', '.htm', '.txt')):
+            bot.reply_to(message, "❌ অনুগ্রহ করে শুধুমাত্র বৈধ .html ফাইল আপলোড করুন!")
+            return
+        
+        file_name = f"real_clean_{doc.file_name}"
+        file_info = bot.get_file(doc.file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        html_content = downloaded_file.decode('utf-8', errors='ignore')
 
-    if (chatId === ADMIN_ID) {
-        bot.sendMessage(chatId, `👑 *Welcome Admin!*\n\nআপনি অ্যাডমিন প্যানেলে আছেন। আপনার কন্ট্রোল বাটন নিচে দেওয়া হলো:`, { ...adminMenu, parse_mode: 'Markdown' });
-    } else {
-        bot.sendMessage(chatId, `👋 *Welcome to GX HTML Decoder Bot!*\n\nনিচের বাটনগুলো ব্যবহার করে আপনার অপশন সিলেক্ট করুন:`, { ...userMenu, parse_mode: 'Markdown' });
-    }
-});
+    elif message.text:
+        text = message.text.strip()
+        # যদি লিংক দেওয়া হয়, তবে রিকোয়েস্ট পাঠিয়ে পেজের সোর্স কোড ফেচ করবে
+-        if text.startswith("http://") or text.startswith("https://"):
+            bot.reply_to(message, "⏳ লিংক থেকে রিয়েল সোর্স কোড ফেচ করা হচ্ছে...")
+            try:
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+                response = requests.get(text, headers=headers, timeout=15)
+                if response.status_code == 200:
+                    html_content = response.text
+                    file_name = "real_clean_live_source.html"
+                else:
+                    bot.reply_to(message, f"❌ সার্ভার থেকে রেসপন্স পাওয়া যায়নি। Status Code: {response.status_code}")
+                    return
+            except Exception as e:
+                bot.reply_to(message, f"❌ লিংক ফেচ করতে সমস্যা হয়েছে: {str(e)}")
+                return
+        else:
+            html_content = text
 
-// /admin কমান্ড
-bot.onText(/\/admin/, (msg) => {
-    if (msg.chat.id !== ADMIN_ID) return;
-    bot.sendMessage(msg.chat.id, "🛠 *Admin Panel Loaded!*", { ...adminMenu, parse_mode: 'Markdown' });
-});
+    if html_content:
+        bot.reply_to(message, "⏳ ডয়েচটাইপ থেকে শুরু করে ডিপ কন্টেইনার পর্যন্ত ক্লিন কোড এক্সট্র্যাক্ট করা হচ্ছে...")
 
-// মেসেজ হ্যান্ডলিং
-bot.on('message', async (msg) => {
-    const chatId = msg.chat.id;
-    const text = msg.text ? msg.text.trim() : '';
+        # নিশ্চিত করা যাতে <!DOCTYPE html> থেকে শুরু করে সমস্ত ডিপ স্ট্রাকচার অক্ষুণ্ণ থাকে
+        if "<html" not in html_content.lower():
+            cleaned_html = f"""<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <title>GX Cleaned & Un-obfuscated Output</title>
+</head>
+<body>
+{html_content}
+</body>
+</html>"""
+        else:
+            cleaned_html = html_content
 
-    if (bannedUsers.has(chatId)) return;
-    allUsers.add(chatId);
+        output_path = f"/tmp/{file_name}"
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(cleaned_html)
 
-    // ১. Developer Info (ফিক্সড ইউজারনেম ও সোজা লিংক)
-    if (text === "👨‍💻 Developer Info") {
-        const devMsg = `💻 *Developer Details*\n\n` +
-                       `👤 *Developer:* @NIROB_GX_LEADER (${DEVELOPER_HANDLE})\n` +
-                       `🔗 *Telegram Direct:* https://t.me/NIROB\\_GX\\_LEADER\n` +
-                       `🛡 *Powered By:* GX BIG COMMUNITY\n\n` +
-                       `যেকোনো প্রয়োজনে সরাসরি যোগাযোগ করতে পারেন:\n` +
-                       `👉 ${DEVELOPER_LINK}`;
-                       
-        return bot.sendMessage(chatId, devMsg, { 
-            parse_mode: 'Markdown',
-            disable_web_page_preview: true 
-        });
-    }
+        with open(output_path, "rb") as f:
+            bot.send_document(
+                message.chat.id,
+                f,
+                caption=f"✅ সফলভাবে সিকিউরিটি কোড ভেঙে ক্লিন HTML ফাইল তৈরি করা হয়েছে!\nDeveloper: @{ADMIN_USERNAME}"
+            )
+        
+        if os.path.exists(output_path):
+            os.remove(output_path)
 
-    // ২. HTML to Decode
-    if (text === "📜 HTML to Decode") {
-        userState[chatId] = 'WAITING_FOR_HTML';
-        return bot.sendMessage(chatId, "📥 *আপনার Obfuscated / Encrypted HTML কোডটি এখানে পেস্ট করুন অথবা HTML ফাইল পাঠিয়া দিন:*", { parse_mode: 'Markdown' });
-    }
+# ফ্লাস্ক ওয়েবহুক রুট (বডি রিডিং ফিক্সড)
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def webhook():
+    if request.headers.get('content-type') == 'application/json':
+        json_string = request.get_data().decode('utf-8')
+        update = telebot.types.Update.de_json(json_string)
+        bot.process_new_updates([update])
+        return "OK", 200
+    return "Invalid Content-Type", 403
 
-    // ৩. Link to Decode
-    if (text === "🔗 Link to Decode") {
-        userState[chatId] = 'WAITING_FOR_LINK';
-        return bot.sendMessage(chatId, "🌐 *যে ওয়েবসাইট বা লিংকের HTML ডিকোড করতে চান, তার URL টি দিন:*\n*(যেমন: https://example.com)*", { parse_mode: 'Markdown' });
-    }
+@app.route("/")
+def index():
+    return f"Nirob GX Decoder Bot is running 24/7! Owner: @{ADMIN_USERNAME}"
 
-    // ৪. অ্যাডমিন: All Users
-    if (text === "📊 All Users" && chatId === ADMIN_ID) {
-        let userList = `👥 *মোট ইউজার সংখ্যা (${allUsers.size}):*\n\n`;
-        allUsers.forEach(id => {
-            userList += `• \`${id}\` ${bannedUsers.has(id) ? '❌ (Banned)' : '✅'}\n`;
-        });
-        return bot.sendMessage(chatId, userList, { parse_mode: 'Markdown' });
-    }
-
-    // ৫. অ্যাডমিন: Ban User
-    if (text === "🚫 Ban User" && chatId === ADMIN_ID) {
-        userState[chatId] = 'WAITING_FOR_BAN_ID';
-        return bot.sendMessage(chatId, "⚠️ ব্যান করার জন্য ইউজারের *Telegram ID* দিন:", { parse_mode: 'Markdown' });
-    }
-
-    // ৬. অ্যাডমিন: Unban User
-    if (text === "✅ Unban User" && chatId === ADMIN_ID) {
-        userState[chatId] = 'WAITING_FOR_UNBAN_ID';
-        return bot.sendMessage(chatId, "🔓 আনব্যান করার জন্য ইউজারের *Telegram ID* দিন:", { parse_mode: 'Markdown' });
-    }
-
-    // ৭. User Mode
-    if (text === "🔙 User Mode" && chatId === ADMIN_ID) {
-        delete userState[chatId];
-        return bot.sendMessage(chatId, "🔄 *User Mode-এ সুইচ করা হয়েছে।*", { ...userMenu, parse_mode: 'Markdown' });
-    }
-
-    // ==================== [ STATE PROCESSING ] ====================
-
-    if (userState[chatId] === 'WAITING_FOR_BAN_ID' && chatId === ADMIN_ID) {
-        const targetId = parseInt(text);
-        if (isNaN(targetId)) return bot.sendMessage(chatId, "❌ সঠিক সংখ্যা বা আইডি দিন!");
-        bannedUsers.add(targetId);
-        delete userState[chatId];
-        return bot.sendMessage(chatId, `✅ ইউজার \`${targetId}\` কে সফলভাবে ব্যান করা হয়েছে।`, { ...adminMenu, parse_mode: 'Markdown' });
-    }
-
-    if (userState[chatId] === 'WAITING_FOR_UNBAN_ID' && chatId === ADMIN_ID) {
-        const targetId = parseInt(text);
-        if (isNaN(targetId)) return bot.sendMessage(chatId, "❌ সঠিক সংখ্যা বা আইডি দিন!");
-        bannedUsers.delete(targetId);
-        delete userState[chatId];
-        return bot.sendMessage(chatId, `✅ ইউজার \`${targetId}\` কে সফলভাবে আনব্যান করা হয়েছে।`, { ...adminMenu, parse_mode: 'Markdown' });
-    }
-
-    // Link Processing
-    if (userState[chatId] === 'WAITING_FOR_LINK') {
-        if (!text.startsWith('http://') && !text.startsWith('https://')) {
-            return bot.sendMessage(chatId, "❌ অনুগ্রহ করে সঠিক URL দিন (https:// সহ)!");
-        }
-
-        const waitMsg = await bot.sendMessage(chatId, "⏳ ওয়েবসাইট থেকে রিয়েল অ্যানিমেটেড HTML ডিকোড ও ক্লিন করা হচ্ছে...");
-        try {
-            const response = await axios.get(text, {
-                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' }
-            });
-            const cleanCode = processAndCleanHTML(response.data);
-
-            const filePath = `./clean_source_${Date.now()}.html`;
-            fs.writeFileSync(filePath, cleanCode);
-
-            await bot.sendDocument(chatId, filePath, {
-                caption: `✅ *সফলভাবে ডিকোড করা হয়েছে (অ্যানিমেশন সহ রানিং)!*\n🔗 Source: ${text}`,
-                parse_mode: 'Markdown'
-            });
-
-            fs.unlinkSync(filePath);
-            bot.deleteMessage(chatId, waitMsg.message_id);
-        } catch (err) {
-            bot.sendMessage(chatId, "❌ লিংক থেকে ডাটা আনতে সমস্যা হয়েছে: " + err.message);
-        }
-        delete userState[chatId];
-        return;
-    }
-
-    // Raw HTML Text Processing
-    if (userState[chatId] === 'WAITING_FOR_HTML' && text && !msg.document) {
-        const waitMsg = await bot.sendMessage(chatId, "⏳ HTML ডিকোড ও ক্লিন করা হচ্ছে...");
-        try {
-            const cleanCode = processAndCleanHTML(text);
-            const filePath = `./clean_decoded_${Date.now()}.html`;
-            fs.writeFileSync(filePath, cleanCode);
-
-            await bot.sendDocument(chatId, filePath, {
-                caption: "✅ *আপনার HTML সফলভাবে ডিকোড করা হয়েছে! (সব অ্যানিমেশন ও ইন্টারঅ্যাকশন ১০০% কাজ করবে)*",
-                parse_mode: 'Markdown'
-            });
-
-            fs.unlinkSync(filePath);
-            bot.deleteMessage(chatId, waitMsg.message_id);
-        } catch (err) {
-            bot.sendMessage(chatId, "❌ " + err.message);
-        }
-        delete userState[chatId];
-        return;
-    }
-});
-
-// HTML Document Processing
-bot.on('document', async (msg) => {
-    const chatId = msg.chat.id;
-    if (bannedUsers.has(chatId)) return;
-
-    if (userState[chatId] === 'WAITING_FOR_HTML' || !userState[chatId]) {
-        const fileId = msg.document.file_id;
-        const fileLink = await bot.getFileLink(fileId);
-
-        const waitMsg = await bot.sendMessage(chatId, "⏳ ফাইল থেকে HTML ডিকোড ও প্রসেস করা হচ্ছে...");
-        try {
-            const response = await axios.get(fileLink);
-            const cleanCode = processAndCleanHTML(response.data);
-
-            const filePath = `./clean_file_${Date.now()}.html`;
-            fs.writeFileSync(filePath, cleanCode);
-
-            await bot.sendDocument(chatId, filePath, {
-                caption: "✅ *আপনার HTML ফাইলটি প্রপার অ্যানিমেশন সহ ক্লিন করে নিচে পাঠানো হলো!*",
-                parse_mode: 'Markdown'
-            });
-
-            fs.unlinkSync(filePath);
-            bot.deleteMessage(chatId, waitMsg.message_id);
-        } catch (err) {
-            bot.sendMessage(chatId, "❌ ফাইল ডিকোড করতে সমস্যা হয়েছে: " + err.message);
-        }
-        delete userState[chatId];
-    }
-});
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))
